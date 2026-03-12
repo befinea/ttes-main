@@ -65,9 +65,9 @@ class DashboardScreen extends ConsumerWidget {
                   const SizedBox(width: 8),
                   AnimatedGlassCard(
                     padding: const EdgeInsets.all(8),
-                    color: AppColors.primary,
-                    onTap: () => context.push('/profile'),
-                    child: const Icon(Icons.person, size: 20, color: Colors.white),
+                    color: theme.colorScheme.surface,
+                    onTap: () => context.push('/settings'),
+                    child: Icon(Icons.settings_rounded, size: 20, color: theme.colorScheme.onSurface),
                   ),
                   const SizedBox(width: 16),
                 ],

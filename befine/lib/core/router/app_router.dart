@@ -13,6 +13,8 @@ import '../../features/operations/transaction_create_screen.dart';
 import '../../features/operations/supplier_create_edit_screen.dart';
 import '../../features/reports/reports_screen.dart';
 import '../../features/profile/profile_screen.dart';
+import '../../features/settings/settings_screen.dart';
+import '../../features/settings/categories_screen.dart';
 import '../../features/barcode/scanner_screen.dart';
 import '../../features/barcode/barcode_print_screen.dart';
 import '../../ui/screens/main_shell.dart';
@@ -108,8 +110,18 @@ class AppRouter {
             builder: (context, state) => const ReportsScreen(),
           ),
           GoRoute(
-            path: '/profile',
-            builder: (context, state) => const ProfileScreen(),
+            path: '/settings',
+            builder: (context, state) => const SettingsScreen(),
+            routes: [
+              GoRoute(
+                path: 'profile',
+                builder: (context, state) => const ProfileScreen(),
+              ),
+              GoRoute(
+                path: 'categories',
+                builder: (context, state) => const CategoriesScreen(),
+              ),
+            ],
           ),
         ],
       ),

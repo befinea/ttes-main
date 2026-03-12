@@ -44,62 +44,100 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     }
   }
 
-  void _showAddProductDialog() {
-    // Basic dialog to simulate adding a new product directly to this store
+  void _showAddProductDialog() async {
     final nameCtrl = TextEditingController();
     final priceCtrl = TextEditingController();
     final qtyCtrl = TextEditingController();
+    String? selectedCategoryId;
+
+    // Fetch categories for the dropdown
+    List<Map<String, dynamic>> categories = [];
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user != null) {
+        final profile = await _supabase.from('profiles').select('company_id').eq('id', user.id).single();
+        final data = await _supabase.from('categories').select().eq('company_id', profile['company_id']).order('name');
+        categories = List<Map<String, dynamic>>.from(data);
+      }
+    } catch (e) {
+      debugPrint('Error fetching categories: $e');
+    }
+
+    if (!mounted) return;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('إضافة منتج جديد'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم المنتج')),
-              const SizedBox(height: 12),
-              TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'سعر البيع')),
-              const SizedBox(height: 12),
-              TextField(controller: qtyCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'الكمية الأولية')),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameCtrl.text.isEmpty) return;
-              Navigator.pop(ctx);
-              
-              try {
-                final user = _supabase.auth.currentUser;
-                final profile = await _supabase.from('profiles').select('company_id').eq('id', user!.id).single();
-                
-                // 1. Create Product
-                final productRes = await _supabase.from('products').insert({
-                  'company_id': profile['company_id'],
-                  'name': nameCtrl.text.trim(),
-                  'sale_price': double.tryParse(priceCtrl.text) ?? 0,
-                }).select().single();
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text('إضافة منتج جديد'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم المنتج')),
+                    const SizedBox(height: 12),
+                    TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'سعر البيع')),
+                    const SizedBox(height: 12),
+                    TextField(controller: qtyCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'الكمية الأولية')),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: selectedCategoryId,
+                      decoration: const InputDecoration(labelText: 'الصنف (اختياري)'),
+                      items: [
+                        const DropdownMenuItem<String>(value: null, child: Text('بدون صنف')),
+                        ...categories.map((cat) => DropdownMenuItem<String>(
+                          value: cat['id'] as String,
+                          child: Text(cat['name'] as String),
+                        )),
+                      ],
+                      onChanged: (val) => setDialogState(() => selectedCategoryId = val),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (nameCtrl.text.isEmpty) return;
+                    Navigator.pop(ctx);
+                    
+                    try {
+                      final user = _supabase.auth.currentUser;
+                      final profile = await _supabase.from('profiles').select('company_id').eq('id', user!.id).single();
+                      
+                      final productData = <String, dynamic>{
+                        'company_id': profile['company_id'],
+                        'name': nameCtrl.text.trim(),
+                        'sale_price': double.tryParse(priceCtrl.text) ?? 0,
+                      };
+                      if (selectedCategoryId != null) {
+                        productData['category_id'] = selectedCategoryId;
+                      }
 
-                // 2. Add Stock to this Store
-                await _supabase.from('stock_levels').insert({
-                  'location_id': widget.storeId,
-                  'product_id': productRes['id'],
-                  'quantity': int.tryParse(qtyCtrl.text) ?? 0,
-                });
+                      final productRes = await _supabase.from('products').insert(productData).select().single();
 
-                _fetchProducts();
-              } catch (e) {
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e')));
-              }
-            },
-            child: const Text('إضافة'),
-          ),
-        ],
-      ),
+                      await _supabase.from('stock_levels').insert({
+                        'location_id': widget.storeId,
+                        'product_id': productRes['id'],
+                        'quantity': int.tryParse(qtyCtrl.text) ?? 0,
+                      });
+
+                      _fetchProducts();
+                    } catch (e) {
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+                    }
+                  },
+                  child: const Text('إضافة'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

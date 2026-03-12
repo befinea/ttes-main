@@ -77,6 +77,141 @@ class _PosScreenState extends State<PosScreen> {
     _total = _cartItems.fold(0, (sum, item) => sum + (item['price'] as double) * (item['qty'] as int));
   }
 
+  void _showSalesHistory(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          maxChildSize: 0.9,
+          minChildSize: 0.4,
+          builder: (_, scrollController) {
+            final theme = Theme.of(context);
+            return Container(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  // Handle bar
+                  Container(
+                    margin: const EdgeInsets.only(top: 12),
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(2)),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Icon(Icons.history_rounded, color: AppColors.primary),
+                        const SizedBox(width: 12),
+                        const Text('سجل المبيعات', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: FutureBuilder<List<Map<String, dynamic>>>(
+                      future: _fetchSalesHistory(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (snapshot.hasError) {
+                          return Center(child: Text('حدث خطأ: ${snapshot.error}'));
+                        }
+                        final sales = snapshot.data ?? [];
+                        if (sales.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey.withOpacity(0.4)),
+                                const SizedBox(height: 16),
+                                const Text('لا توجد مبيعات بعد', style: TextStyle(color: Colors.grey, fontSize: 16)),
+                              ],
+                            ),
+                          );
+                        }
+                        return ListView.builder(
+                          controller: scrollController,
+                          padding: const EdgeInsets.all(16),
+                          itemCount: sales.length,
+                          itemBuilder: (ctx, i) {
+                            final sale = sales[i];
+                            final amount = (sale['total_amount'] as num?)?.toDouble() ?? 0;
+                            final date = DateTime.tryParse(sale['created_at'] ?? '') ?? DateTime.now();
+                            final locationName = (sale['locations'] as Map?)?['name'] ?? 'غير محدد';
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: AnimatedGlassCard(
+                                padding: const EdgeInsets.all(16),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.success.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Icon(Icons.receipt_rounded, color: AppColors.success, size: 24),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('فاتورة بيع', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '$locationName • ${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}',
+                                            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Text('${amount.toStringAsFixed(2)} د', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.success)),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchSalesHistory() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return [];
+      final profile = await _supabase.from('profiles').select('company_id').eq('id', user.id).single();
+      final companyId = profile['company_id'];
+      final data = await _supabase
+          .from('transactions')
+          .select('id, total_amount, created_at, locations(name)')
+          .eq('company_id', companyId)
+          .eq('type', 'sale')
+          .order('created_at', ascending: false)
+          .limit(30);
+      return List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      debugPrint('Fetch sales history error: $e');
+      return [];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -122,7 +257,7 @@ class _PosScreenState extends State<PosScreen> {
             ),
             IconButton(
               icon: const Icon(Icons.history_rounded),
-              onPressed: () {},
+              onPressed: () => _showSalesHistory(context),
               style: IconButton.styleFrom(
                 backgroundColor: theme.colorScheme.surface,
                 foregroundColor: theme.colorScheme.onSurface,
@@ -277,34 +412,40 @@ class _PosScreenState extends State<PosScreen> {
                     final user = _supabase.auth.currentUser;
                     if (user == null) throw Exception('المستخدم غير مسجل الدخول');
 
+                    debugPrint('POS Checkout: User authenticated. Fetching profile for ${user.id}...');
                     final profile = await _supabase.from('profiles').select('company_id').eq('id', user.id).single();
                     final companyId = profile['company_id'];
+                    debugPrint('POS Checkout: Company ID: $companyId. Fetching locations...');
                     
                     final locations = await _supabase.from('profile_locations').select('location_id').eq('profile_id', user.id).limit(1);
                     
                     String? locationId;
                     if (locations.isNotEmpty) {
                       locationId = locations.first['location_id'];
+                      debugPrint('POS Checkout: Found linked location: $locationId');
                     } else {
+                      debugPrint('POS Checkout: No linked location. Falling back to company locations...');
                       // Fallback: Get any location (pos or warehouse) belonging to the company
                       final companyLocs = await _supabase.from('locations').select('id').eq('company_id', companyId).limit(1);
                       if (companyLocs.isEmpty) {
                          throw Exception('لا يوجد أي موقع أو نقطة بيع مرتبطة بالشركة. يرجى إضافة نقطة بيع أولاً.');
                       }
                       locationId = companyLocs.first['id'] as String;
+                      debugPrint('POS Checkout: Fallback location used: $locationId');
                     }
 
+                    debugPrint('POS Checkout: Inserting transaction record...');
                     // 2. Insert Transaction
                     final transRes = await _supabase.from('transactions').insert({
                       'company_id': companyId,
                       'location_id': locationId,
                       'performed_by': user.id,
                       'type': 'sale',
-                      'status': 'completed',
                       'total_amount': _total,
                     }).select('id').single();
 
                     final transId = transRes['id'];
+                    debugPrint('POS Checkout: Transaction inserted with ID: $transId. Preparing items...');
 
                     // 3. Insert Transaction Items
                     final itemsToInsert = _cartItems.map((item) => {
@@ -314,7 +455,9 @@ class _PosScreenState extends State<PosScreen> {
                       'unit_price': item['price'],
                     }).toList();
 
+                    debugPrint('POS Checkout: Inserting ${itemsToInsert.length} items...');
                     await _supabase.from('transaction_items').insert(itemsToInsert);
+                    debugPrint('POS Checkout: Items inserted successfully.');
 
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -322,7 +465,8 @@ class _PosScreenState extends State<PosScreen> {
                       );
                       setState(() { _cartItems.clear(); _total = 0; });
                     }
-                  } catch (e) {
+                  } catch (e, st) {
+                    debugPrint('Checkout error: $e\\n$st');
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('حدث خطأ: $e'), backgroundColor: AppColors.error),

@@ -26,7 +26,7 @@ class OperationsScreen extends StatelessWidget {
     final theme = Theme.of(context);
     
     return DefaultTabController(
-      length: 5,
+      length: 6,
       initialIndex: _getInitialIndex(),
       child: Scaffold(
         body: Container(
@@ -50,6 +50,7 @@ class OperationsScreen extends StatelessWidget {
                     _QuickAddTab(),
                     _TransactionListTab(type: 'import'),
                     _TransactionListTab(type: 'export'),
+                    _TransactionListTab(type: 'sale'),
                     _SuppliersTab(),
                     _TasksTab(),
                   ],
@@ -94,6 +95,7 @@ class OperationsScreen extends StatelessWidget {
               Tab(text: 'إضافة سريعة'),
               Tab(text: 'الواردات'),
               Tab(text: 'الصادرات'),
+              Tab(text: 'المبيعات'),
               Tab(text: 'الموردون'),
               Tab(text: 'المهام'),
             ],
@@ -211,7 +213,6 @@ class _TransactionListTabState extends State<_TransactionListTab> {
 
   @override
   Widget build(BuildContext context) {
-    final isImport = widget.type == 'import';
     return Column(
       children: [
         Padding(
@@ -224,7 +225,7 @@ class _TransactionListTabState extends State<_TransactionListTab> {
                   child: TextField(
                     controller: _searchCtrl,
                     decoration: InputDecoration(
-                      hintText: isImport ? 'بحث في الواردات...' : 'بحث في الصادرات...',
+                      hintText: widget.type == 'import' ? 'بحث في الواردات...' : widget.type == 'export' ? 'بحث في الصادرات...' : 'بحث في المبيعات...',
                       prefixIcon: const Icon(Icons.search, color: AppColors.primary),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
@@ -271,7 +272,9 @@ class _TransactionListTabState extends State<_TransactionListTab> {
                   itemCount: items.length,
                   itemBuilder: (ctx, i) {
                     final t = items[i];
-                    final color = isImport ? Colors.blue : Colors.orange;
+                    final color = widget.type == 'import' ? Colors.blue : widget.type == 'export' ? Colors.orange : AppColors.success;
+                    final icon = widget.type == 'import' ? Icons.download : widget.type == 'export' ? Icons.upload : Icons.receipt_rounded;
+                    final label = widget.type == 'import' ? 'وارد' : widget.type == 'export' ? 'صادر' : 'بيع';
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: AnimatedGlassCard(
@@ -281,14 +284,14 @@ class _TransactionListTabState extends State<_TransactionListTab> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                              child: Icon(isImport ? Icons.download : Icons.upload, color: color),
+                              child: Icon(icon, color: color),
                             ),
                             const SizedBox(width: 16),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('${isImport ? 'وارد' : 'صادر'} #${t['id'].toString().substring(0, 8)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  Text('$label #${t['id'].toString().substring(0, 8)}', style: const TextStyle(fontWeight: FontWeight.bold)),
                                   Text((t['locations'] as Map<String, dynamic>?)?['name']?.toString() ?? 'متجر غير معروف', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
                                 ],
                               ),

@@ -18,11 +18,36 @@ class _WarehouseDetailScreenState extends State<WarehouseDetailScreen> {
   final _supabase = Supabase.instance.client;
   bool _isLoading = true;
   List<Map<String, dynamic>> _stores = [];
+  int? _maxStores;
+  List<Map<String, dynamic>> _allCategories = [];
 
   @override
   void initState() {
     super.initState();
     _fetchStores();
+    _fetchWarehouseDetails();
+    _fetchCategories();
+  }
+
+  Future<void> _fetchWarehouseDetails() async {
+    try {
+      final data = await _supabase.from('locations').select('max_stores').eq('id', widget.warehouseId).single();
+      if (mounted) setState(() => _maxStores = data['max_stores'] as int?);
+    } catch (e) {
+      debugPrint('Error fetching warehouse details: $e');
+    }
+  }
+
+  Future<void> _fetchCategories() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+      final profile = await _supabase.from('profiles').select('company_id').eq('id', user.id).single();
+      final data = await _supabase.from('categories').select().eq('company_id', profile['company_id']).order('name');
+      if (mounted) setState(() => _allCategories = List<Map<String, dynamic>>.from(data));
+    } catch (e) {
+      debugPrint('Error fetching categories: $e');
+    }
   }
 
   Future<void> _fetchStores() async {
@@ -49,19 +74,28 @@ class _WarehouseDetailScreenState extends State<WarehouseDetailScreen> {
     }
   }
 
-  Future<void> _addStore(String name) async {
+  Future<void> _addStore(String name, List<String> categoryIds) async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
       final profile = await _supabase.from('profiles').select('company_id').eq('id', user.id).single();
       
-      await _supabase.from('locations').insert({
+      final storeRes = await _supabase.from('locations').insert({
         'company_id': profile['company_id'],
         'name': name,
         'type': 'store',
         'parent_id': widget.warehouseId,
-      });
+      }).select('id').single();
+
+      // Save store categories
+      if (categoryIds.isNotEmpty) {
+        final rows = categoryIds.map((catId) => {
+          'location_id': storeRes['id'],
+          'category_id': catId,
+        }).toList();
+        await _supabase.from('store_categories').insert(rows);
+      }
 
       _fetchStores();
     } catch (e) {
@@ -73,26 +107,75 @@ class _WarehouseDetailScreenState extends State<WarehouseDetailScreen> {
   }
 
   void _showAddDialog() {
+    // Check max_stores limit
+    if (_maxStores != null && _stores.length >= _maxStores!) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('تم الوصول للحد الأقصى للمتاجر ($_maxStores متاجر)'),
+        backgroundColor: AppColors.error,
+      ));
+      return;
+    }
+
     final nameCtrl = TextEditingController();
+    final selectedCategoryIds = <String>{};
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('إضافة متجر جديد'),
-        content: TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم المتجر (مثال: متجر الأدوات الإلكترونية)')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () {
-              if (nameCtrl.text.trim().isNotEmpty) {
-                _addStore(nameCtrl.text.trim());
-                Navigator.pop(ctx);
-              }
-            },
-            child: const Text('إضافة'),
-          ),
-        ],
-      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text('إضافة متجر جديد'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم المتجر (مثال: متجر الأدوات الإلكترونية)')),
+                    if (_allCategories.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      const Text('اختر الأصناف التابعة للمتجر:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const SizedBox(height: 8),
+                      ..._allCategories.map((cat) {
+                        final catId = cat['id'] as String;
+                        return CheckboxListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(cat['name'] as String),
+                          value: selectedCategoryIds.contains(catId),
+                          onChanged: (val) {
+                            setDialogState(() {
+                              if (val == true) {
+                                selectedCategoryIds.add(catId);
+                              } else {
+                                selectedCategoryIds.remove(catId);
+                              }
+                            });
+                          },
+                          activeColor: AppColors.primary,
+                        );
+                      }),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+                ElevatedButton(
+                  onPressed: () {
+                    if (nameCtrl.text.trim().isNotEmpty) {
+                      _addStore(nameCtrl.text.trim(), selectedCategoryIds.toList());
+                      Navigator.pop(ctx);
+                    }
+                  },
+                  child: const Text('إضافة'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

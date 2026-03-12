@@ -64,17 +64,19 @@ class _InventoryScreenState extends State<InventoryScreen> {
     }
   }
 
-  Future<void> _addWarehouse(String name, String address) async {
+  Future<void> _addWarehouse(String name, String address, int? maxStores) async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
       final profile = await _supabase.from('profiles').select('company_id').eq('id', user.id).single();
-      await _supabase.from('locations').insert({
+      final insertData = <String, dynamic>{
         'company_id': profile['company_id'],
         'name': name,
         'type': 'warehouse',
         'address': address,
-      });
+      };
+      if (maxStores != null) insertData['max_stores'] = maxStores;
+      await _supabase.from('locations').insert(insertData);
       _fetchWarehouses();
     } catch (e) {
       if (mounted) {
@@ -91,25 +93,38 @@ class _InventoryScreenState extends State<InventoryScreen> {
   void _showAddDialog() {
     final nameCtrl = TextEditingController();
     final addressCtrl = TextEditingController();
+    final maxStoresCtrl = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('إضافة مخزن جديد'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم المخزن')),
-            const SizedBox(height: 12),
-            TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: 'العنوان')),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم المخزن')),
+              const SizedBox(height: 12),
+              TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: 'العنوان')),
+              const SizedBox(height: 12),
+              TextField(
+                controller: maxStoresCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'الحد الأقصى للمتاجر (اختياري)',
+                  hintText: 'اتركه فارغاً لعدد غير محدود',
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
             onPressed: () {
               if (nameCtrl.text.trim().isNotEmpty) {
-                _addWarehouse(nameCtrl.text.trim(), addressCtrl.text.trim());
+                final maxStores = int.tryParse(maxStoresCtrl.text.trim());
+                _addWarehouse(nameCtrl.text.trim(), addressCtrl.text.trim(), maxStores);
                 Navigator.pop(ctx);
               }
             },
