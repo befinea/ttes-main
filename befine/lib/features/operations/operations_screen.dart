@@ -3,15 +3,31 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../ui/widgets/animated_glass_card.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../auth/application/auth_service.dart';
 import 'data/operations_repository.dart';
 import 'suppliers_screen.dart';
 
-class OperationsScreen extends StatelessWidget {
+class OperationsScreen extends ConsumerStatefulWidget {
   final String? initialTab;
   const OperationsScreen({super.key, this.initialTab});
 
-  int _getInitialIndex() {
-    switch (initialTab) {
+  @override
+  ConsumerState<OperationsScreen> createState() => _OperationsScreenState();
+}
+
+class _OperationsScreenState extends ConsumerState<OperationsScreen> {
+  int _getInitialIndex(bool isSupplier) {
+    if (isSupplier) {
+      switch (widget.initialTab) {
+        case 'imports': return 0;
+        case 'exports': return 1;
+        case 'sales': return 2;
+        default: return 0;
+      }
+    }
+
+    switch (widget.initialTab) {
       case 'quick_add': return 0;
       case 'imports': return 1;
       case 'exports': return 2;
@@ -24,10 +40,14 @@ class OperationsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final userState = ref.watch(authProvider);
+    final isSupplier = userState.user?.role == 'supplier';
+    
+    final int tabsCount = isSupplier ? 3 : 6;
     
     return DefaultTabController(
-      length: 6,
-      initialIndex: _getInitialIndex(),
+      length: tabsCount,
+      initialIndex: _getInitialIndex(isSupplier),
       child: Scaffold(
         body: Container(
           decoration: BoxDecoration(
@@ -43,17 +63,23 @@ class OperationsScreen extends StatelessWidget {
           ),
           child: Column(
             children: [
-              _buildHeader(context),
+              _buildHeader(context, isSupplier),
               Expanded(
                 child: TabBarView(
-                  children: [
-                    _QuickAddTab(),
-                    _TransactionListTab(type: 'import'),
-                    _TransactionListTab(type: 'export'),
-                    _TransactionListTab(type: 'sale'),
-                    _SuppliersTab(),
-                    _TasksTab(),
-                  ],
+                  children: isSupplier 
+                    ? [
+                        const _TransactionListTab(type: 'import'),
+                        const _TransactionListTab(type: 'export'),
+                        const _TransactionListTab(type: 'sale'),
+                      ]
+                    : [
+                        _QuickAddTab(),
+                        const _TransactionListTab(type: 'import'),
+                        const _TransactionListTab(type: 'export'),
+                        const _TransactionListTab(type: 'sale'),
+                        _SuppliersTab(),
+                        _TasksTab(),
+                      ],
                 ),
               ),
             ],
@@ -63,7 +89,7 @@ class OperationsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, bool isSupplier) {
     final theme = Theme.of(context);
     return SafeArea(
       child: Column(
@@ -86,19 +112,25 @@ class OperationsScreen extends StatelessWidget {
               ],
             ),
           ),
-          const TabBar(
+          TabBar(
             isScrollable: true,
             indicatorSize: TabBarIndicatorSize.label,
-            labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             unselectedLabelColor: Colors.grey,
-            tabs: [
-              Tab(text: 'إضافة سريعة'),
-              Tab(text: 'الواردات'),
-              Tab(text: 'الصادرات'),
-              Tab(text: 'المبيعات'),
-              Tab(text: 'الموردون'),
-              Tab(text: 'المهام'),
-            ],
+            tabs: isSupplier 
+              ? const [
+                  Tab(text: 'الواردات'),
+                  Tab(text: 'الصادرات'),
+                  Tab(text: 'المبيعات'),
+                ]
+              : const [
+                  Tab(text: 'إضافة سريعة'),
+                  Tab(text: 'الواردات'),
+                  Tab(text: 'الصادرات'),
+                  Tab(text: 'المبيعات'),
+                  Tab(text: 'الموردون'),
+                  Tab(text: 'المهام'),
+                ],
           ),
           const SizedBox(height: 10),
         ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/error/exceptions.dart' hide AuthException;
@@ -138,7 +139,7 @@ class _SupplierCreateEditScreenState extends State<SupplierCreateEditScreen> {
 
         final newUserId = authRes.user!.id;
 
-        await adminClient.from('profiles').insert({
+        await adminClient.from('profiles').upsert({
           'id': newUserId,
           'company_id': companyId,
           'full_name': _nameCtrl.text.trim(),
@@ -155,7 +156,7 @@ class _SupplierCreateEditScreenState extends State<SupplierCreateEditScreen> {
       }
 
       if (!mounted) return;
-      Navigator.of(context).pop(true);
+      context.pop(true);
     } on AuthException catch (e) {
       _showError('خطأ: ${e.message}');
     } on PostgrestException catch (e) {

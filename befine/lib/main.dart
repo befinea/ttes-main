@@ -12,17 +12,32 @@ import 'core/theme/theme_provider.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables
-  await dotenv.load(fileName: ".env");
+  try {
+    // 1. Try loading from --dart-define (Recommended for Web/Production)
+    String url = const String.fromEnvironment('SUPABASE_URL');
+    String anonKey = const String.fromEnvironment('SUPABASE_ANON_KEY');
 
-  // Initialize Supabase
-  await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL'] ?? '',
-    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
-  );
+    // 2. Fallback to .env file if environment variables are empty
+    if (url.isEmpty || anonKey.isEmpty) {
+      try {
+        await dotenv.load(fileName: ".env");
+        url = dotenv.env['SUPABASE_URL'] ?? '';
+        anonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+      } catch (e) {
+        debugPrint('Dotenv load failed: $e');
+      }
+    }
+
+    if (url.isNotEmpty && anonKey.isNotEmpty) {
+      await Supabase.initialize(url: url, anonKey: anonKey);
+    } else {
+      debugPrint('Warning: Supabase configuration is missing. The app may not function correctly.');
+    }
+  } catch (e) {
+    debugPrint('Initialization Error: $e');
+  }
 
   runApp(
-    // Wrapping the app with ProviderScope for Riverpod
     const ProviderScope(
       child: MyApp(),
     ),

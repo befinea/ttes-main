@@ -3,18 +3,20 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../ui/widgets/animated_glass_card.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../auth/application/auth_service.dart';
 
-class WarehouseDetailScreen extends StatefulWidget {
+class WarehouseDetailScreen extends ConsumerStatefulWidget {
   final String warehouseId;
   final String warehouseName;
 
   const WarehouseDetailScreen({super.key, required this.warehouseId, required this.warehouseName});
 
   @override
-  State<WarehouseDetailScreen> createState() => _WarehouseDetailScreenState();
+  ConsumerState<WarehouseDetailScreen> createState() => _WarehouseDetailScreenState();
 }
 
-class _WarehouseDetailScreenState extends State<WarehouseDetailScreen> {
+class _WarehouseDetailScreenState extends ConsumerState<WarehouseDetailScreen> {
   final _supabase = Supabase.instance.client;
   bool _isLoading = true;
   List<Map<String, dynamic>> _stores = [];
@@ -182,6 +184,8 @@ class _WarehouseDetailScreenState extends State<WarehouseDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final userState = ref.watch(authProvider);
+    final isSupplier = userState.user?.role == 'supplier';
     
     return Scaffold(
       body: Container(
@@ -204,7 +208,8 @@ class _WarehouseDetailScreenState extends State<WarehouseDetailScreen> {
                 title: Text('مخزن: ${widget.warehouseName}', style: theme.textTheme.titleMedium),
                 floating: true,
                 actions: [
-                  IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: _showAddDialog),
+                  if (!isSupplier)
+                    IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: _showAddDialog),
                 ],
               ),
               if (_isLoading)
@@ -219,11 +224,12 @@ class _WarehouseDetailScreenState extends State<WarehouseDetailScreen> {
                         const SizedBox(height: 16),
                         const Text('لا يوجد متاجر في هذا المخزن', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 12),
-                        ElevatedButton.icon(
-                          onPressed: _showAddDialog,
-                          icon: const Icon(Icons.add),
-                          label: const Text('إضافة متجر'),
-                        ),
+                        if (!isSupplier)
+                          ElevatedButton.icon(
+                            onPressed: _showAddDialog,
+                            icon: const Icon(Icons.add),
+                            label: const Text('إضافة متجر'),
+                          ),
                       ],
                     ),
                   ),

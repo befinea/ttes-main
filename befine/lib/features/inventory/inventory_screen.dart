@@ -3,26 +3,47 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../ui/widgets/animated_glass_card.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../auth/application/auth_service.dart';
 
-class InventoryScreen extends StatefulWidget {
+class InventoryScreen extends ConsumerStatefulWidget {
   const InventoryScreen({super.key});
 
   @override
-  State<InventoryScreen> createState() => _InventoryScreenState();
+  ConsumerState<InventoryScreen> createState() => _InventoryScreenState();
 }
 
-class _InventoryScreenState extends State<InventoryScreen> {
+class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   final _supabase = Supabase.instance.client;
   bool _isLoading = true;
   List<Map<String, dynamic>> _warehouses = [];
   List<Map<String, dynamic>> _filtered = [];
   final _searchCtrl = TextEditingController();
+  Set<String> _assignedWarehouseIds = {};
 
   @override
   void initState() {
     super.initState();
-    _fetchWarehouses();
+    _fetchAssignedWarehouses().then((_) => _fetchWarehouses());
     _searchCtrl.addListener(_onSearch);
+  }
+
+  Future<void> _fetchAssignedWarehouses() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+      final profileState = ref.read(authProvider);
+      if (profileState.user?.role != 'supplier') return; // Only relevant for suppliers
+
+      final data = await _supabase.from('profile_locations').select('location_id').eq('profile_id', user.id);
+      if (mounted) {
+        setState(() {
+          _assignedWarehouseIds = Set<String>.from(data.map((e) => e['location_id'] as String));
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching assigned warehouses: $e');
+    }
   }
 
   @override
@@ -138,9 +159,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final userState = ref.watch(authProvider);
+    final isSupplier = userState.user?.role == 'supplier';
 
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: isSupplier ? null : FloatingActionButton.extended(
         heroTag: 'add_warehouse_fab',
         onPressed: _showAddDialog,
         backgroundColor: AppColors.primary,
@@ -209,11 +232,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           const SizedBox(height: 16),
                           const Text('لا توجد مخازن', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 8),
-                          TextButton.icon(
-                            onPressed: _showAddDialog,
-                            icon: const Icon(Icons.add),
-                            label: const Text('إضافة مخزن'),
-                          ),
+                          if (!isSupplier)
+                            TextButton.icon(
+                              onPressed: _showAddDialog,
+                              icon: const Icon(Icons.add),
+                              label: const Text('إضافة مخزن'),
+                            ),
                         ],
                       ),
                     ),
@@ -225,37 +249,42 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       delegate: SliverChildBuilderDelegate(
                         (ctx, i) {
                           final wh = _filtered[i];
+                          final isAssigned = !isSupplier || _assignedWarehouseIds.contains(wh['id']);
+                          
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 12),
                             child: AnimatedGlassCard(
                               padding: const EdgeInsets.all(16),
-                              onTap: () => context.push('/inventory/warehouse/${wh['id']}', extra: wh['name']),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(14),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary.withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(16),
+                              onTap: isAssigned ? () => context.push('/inventory/warehouse/${wh['id']}', extra: wh['name']) : null,
+                              child: Opacity(
+                                opacity: isAssigned ? 1.0 : 0.5,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(14),
+                                      decoration: BoxDecoration(
+                                        color: isAssigned ? AppColors.primary.withOpacity(0.15) : Colors.grey.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Icon(Icons.warehouse_rounded, color: isAssigned ? AppColors.primary : Colors.grey, size: 28),
                                     ),
-                                    child: const Icon(Icons.warehouse_rounded, color: AppColors.primary, size: 28),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(wh['name'], style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          wh['address'] as String? ?? 'لا يوجد عنوان محدد',
-                                          style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-                                        ),
-                                      ],
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(wh['name'], style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: isAssigned ? null : Colors.grey)),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            isAssigned ? (wh['address'] as String? ?? 'لا يوجد عنوان محدد') : 'مخزن مقفل',
+                                            style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey.shade400),
-                                ],
+                                    Icon(isAssigned ? Icons.arrow_forward_ios : Icons.lock_outline, size: 14, color: Colors.grey.shade400),
+                                  ],
+                                ),
                               ),
                             ),
                           );

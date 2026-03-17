@@ -13,13 +13,17 @@ class AuthRepository {
       final user = _supabase.auth.currentUser;
       if (user == null) return null;
 
-      final response = await _supabase
-          .from('users')
+      final profileData = await _supabase
+          .from('profiles')
           .select()
           .eq('id', user.id)
           .single();
 
-      return AppUser.fromJson(response);
+      final json = Map<String, dynamic>.from(profileData);
+      json['email'] = user.email ?? '';
+      json['name'] = profileData['full_name'];
+
+      return AppUser.fromJson(json);
     } catch (e) {
       throw ServerException('Failed to get user profile: $e');
     }
@@ -37,12 +41,16 @@ class AuthRepository {
       }
 
       final profileResponse = await _supabase
-          .from('users')
+          .from('profiles')
           .select()
           .eq('id', response.user!.id)
           .single();
 
-      return AppUser.fromJson(profileResponse);
+      final json = Map<String, dynamic>.from(profileResponse);
+      json['email'] = response.user!.email ?? '';
+      json['name'] = profileResponse['full_name'];
+
+      return AppUser.fromJson(json);
     } on AuthException catch (e) {
       throw AuthException(e.message);
     } catch (e) {
