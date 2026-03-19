@@ -230,6 +230,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final theme = Theme.of(context);
     final userState = ref.watch(authProvider);
     final userRole = userState.user?.role ?? 'cashier';
+    final screenWidth = MediaQuery.of(context).size.width;
+    
+    // Determine grid counts based on screen width
+    int statsCrossAxisCount = 2;
+    int actionsCrossAxisCount = 4;
+    double statsAspectRatio = 1.4;
+    
+    if (screenWidth > 1200) {
+      statsCrossAxisCount = 4;
+      actionsCrossAxisCount = 8;
+      statsAspectRatio = 2.0;
+    } else if (screenWidth > 800) {
+      statsCrossAxisCount = 4;
+      actionsCrossAxisCount = 6;
+      statsAspectRatio = 1.5;
+    }
     
     return Scaffold(
       body: Container(
@@ -298,12 +314,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                       // Stats Grid — REAL DATA
                       GridView.count(
-                        crossAxisCount: 2,
+                        crossAxisCount: statsCrossAxisCount,
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         mainAxisSpacing: 16,
                         crossAxisSpacing: 16,
-                        childAspectRatio: 1.4,
+                        childAspectRatio: statsAspectRatio,
                         children: [
                           _StatCard(title: 'إجمالي المبيعات', value: _totalSales, icon: Icons.attach_money, color: AppColors.primary),
                           _StatCard(title: 'المنتجات', value: _productCount, icon: Icons.inventory_2, color: AppColors.secondary),
@@ -317,7 +333,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       AppText('إجراءات سريعة', style: theme.textTheme.titleMedium),
                       const SizedBox(height: 16),
                       GridView.count(
-                        crossAxisCount: 4,
+                        crossAxisCount: actionsCrossAxisCount,
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         mainAxisSpacing: 16,

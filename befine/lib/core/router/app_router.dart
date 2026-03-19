@@ -18,6 +18,9 @@ import '../../features/settings/categories_screen.dart';
 import '../../features/barcode/scanner_screen.dart';
 import '../../features/barcode/barcode_print_screen.dart';
 import '../../ui/screens/main_shell.dart';
+import '../../ui/screens/web_shell.dart';
+import '../responsive/responsive_layout.dart';
+import '../../features/dashboard/web/web_dashboard_screen.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -47,13 +50,19 @@ class AppRouter {
         builder: (context, state) => const AuthScreen(),
       ),
 
-      // Main App Shell with Bottom Navigation
+      // Main App Shell with Responsive Navigation
       ShellRoute(
-        builder: (context, state, child) => MainShell(child: child),
+        builder: (context, state, child) => ResponsiveLayout(
+          mobileShell: MainShell(child: child),
+          webShell: WebShell(child: child),
+        ),
         routes: [
           GoRoute(
             path: '/dashboard',
-            builder: (context, state) => const DashboardScreen(),
+            builder: (context, state) => const ResponsiveLayout(
+              mobileShell: DashboardScreen(),
+              webShell: WebDashboardScreen(),
+            ),
           ),
           GoRoute(
             path: '/inventory',
